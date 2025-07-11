@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /> <!-- กำหนดชุดตัวอักษรเป็น UTF-8 เพื่อรองรับภาษาไทยและสัญลักษณ์ต่างๆ -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/> <!-- กำหนด viewport เพื่อให้เว็บเพจตอบสนองกับขนาดหน้าจออุปกรณ์ต่างๆ -->
+  <title id="pageTitle">Warehouse Dashboard</title> <!-- กำหนดชื่อเรื่องของหน้าเว็บที่จะแสดงบนแท็บเบราว์เซอร์ -->
+  <!-- Tailwind CSS CDN for modern styling -->
+  <script src="https://cdn.tailwindcss.com"></script> <!-- เรียกใช้ Tailwind CSS ผ่าน CDN สำหรับการจัดสไตล์ที่ทันสมัยและตอบสนอง -->
+  <!-- Google Fonts - Inter for a clean, modern look -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"> <!-- เรียกใช้ฟอนต์ Inter จาก Google Fonts เพื่อความสวยงามและอ่านง่าย -->
+  <style>
+    /* Custom styles for the Inter font and to ensure full height */
+    html, body { /* กำหนดความสูงของทั้ง html และ body ให้เต็ม viewport */
+      height: 100%;
+      margin: 0; /* ลบ margin เริ่มต้นของ body ออก */
+      font-family: 'Inter', sans-serif; /* กำหนดฟอนต์หลักของหน้าเว็บเป็น Inter */
+      display: flex; /* ใช้ Flexbox เพื่อจัดเรียงองค์ประกอบย่อยในแนวตั้ง */
+      flex-direction: column; /* จัดเรียงองค์ประกอบย่อยในแนวคอลัมน์ (จากบนลงล่าง) */
+    }
+    /* Hide scrollbar for the loading spinner */
+    .no-scrollbar::-webkit-scrollbar {
+        display: none; /* ซ่อน scrollbar สำหรับเว็บเบราว์เซอร์ WebKit (Chrome, Safari) */
+    }
+    .no-scrollbar {
+        -ms-overflow-style: none;  /* ซ่อน scrollbar สำหรับ Internet Explorer และ Edge */
+        scrollbar-width: none;  /* ซ่อน scrollbar สำหรับ Firefox */
+    }
+    /* Ensure the main content area takes up remaining space */
+    .main-content-area {
+      flex-grow: 1; /* ทำให้ส่วนเนื้อหาหลักขยายเต็มพื้นที่แนวตั้งที่เหลืออยู่ */
+      display: flex; /* ใช้ Flexbox เพื่อจัดเรียงองค์ประกอบย่อยภายใน */
+      flex-direction: column; /* จัดเรียงองค์ประกอบย่อยภายในในแนวคอลัมน์ */
+      padding: 0; /* กำหนด padding ทั้งหมดเป็น 0 เพื่อให้ Power BI เต็มความกว้าง */
+    }
+    /* Adjust iframe height to fill its container */
+    #powerbiFrame {
+      flex-grow: 1; /* ทำให้ iframe ของ Power BI ขยายเต็มพื้นที่ที่เหลืออยู่ภายใน #reportContainer */
+      height: 100%; /* กำหนดความสูงให้เต็มความสูงของ parent */
+      min-height: 400px; /* กำหนดความสูงขั้นต่ำสำหรับ iframe เพื่อให้แสดงผลได้ดีบนหน้าจอขนาดเล็ก */
+    }
+    /* Adjust report container height for full screen effect */
+    #reportContainer {
+      flex-grow: 1; /* ทำให้ report container ขยายเต็มความสูงที่เหลืออยู่ */
+      height: 100%; /* Ensure it fills parent height */
+    }
+  </style>
+</head>
+<body class="bg-gray-100"> <!-- กำหนดสีพื้นหลังของ body เป็นสีเทาอ่อนโดยใช้คลาส Tailwind CSS -->
+
+  <!-- Header and Navigation Bar -->
+  <header class="bg-indigo-400 text-white shadow-lg z-20"> <!-- ส่วนหัว (Header) ของหน้าเว็บ พร้อมสีพื้นหลังสีม่วงเข้ม, ข้อความสีขาว, เงา, และ z-index -->
+    <nav class="container mx-auto px-2 py-1 flex flex-col sm:flex-row items-center justify-between"> <!-- แถบนำทาง (Navigation Bar) จัดกึ่งกลาง, มี padding, ใช้ Flexbox เพื่อจัดเรียงองค์ประกอบ -->
+      <!-- Title and Logo -->
+      <div class="flex items-center mb-2 sm:mb-0"> <!-- Container สำหรับโลโก้และชื่อ Dashboard -->
+        <!-- Logo for the dashboard -->
+        <img src="https://placehold.co/40x40/6c63ff/ffffff?text=WH" alt="Warehouse Logo" class="h-10 w-10 mr-3 rounded-full shadow-md border-2 border-indigo-400"> <!-- แท็กรูปภาพสำหรับโลโก้ กำหนดขนาด, margin ขวา, ทำให้เป็นวงกลม, เพิ่มเงาและขอบ -->
+        <h1 class="text-1xl sm:text-1xl font-bold" id="headerText" data-key="headerText">Warehouse Dashboard</h1> <!-- ชื่อ Dashboard พร้อมขนาดตัวอักษรที่ตอบสนองและตัวหนา -->
+      </div>
+
+      <!-- Navigation Links -->
+      <div class="flex justify-center gap-x-3 text-base sm:text-lg font-medium"> <!-- Container สำหรับปุ่มเมนูนำทาง จัดเรียงแบบ Flexbox, มีช่องว่างระหว่างปุ่ม, ขนาดตัวอักษรที่ตอบสนอง -->
+        <button onclick="showReport('expire')" class="hover:text-indigo-200 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md px-2 py-1" data-key="navButton1"> <!-- ปุ่มเมนูสำหรับ "สินค้าหมดอายุ" พร้อมสไตล์ hover, focus และ padding -->
+          สินค้าหมดอายุ
+        </button>
+        <button onclick="showReport('shipment')" class="hover:text-indigo-200 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md px-2 py-1" data-key="navButton2"> <!-- ปุ่มเมนูสำหรับ "Daily Shipment" -->
+          Daily Shipment
+        </button>
+        <button onclick="showReport('inventory')" class="hover:text-indigo-200 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md px-2 py-1" data-key="navButton3"> <!-- ปุ่มเมนูสำหรับ "Inventory on Hand" -->
+          Inventory on Hand
+        </button>
+        <button onclick="showReport('rop')" class="hover:text-indigo-200 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md px-2 py-1" data-key="navButton4"> <!-- ปุ่มเมนูสำหรับ "ROP/Max-Min" -->
+          ROP/Max-Min
+        </button>
+        <button onclick="showReport('billing')" class="hover:text-indigo-200 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md px-2 py-1" data-key="navButton5"> <!-- ปุ่มเมนูสำหรับ "Billing Return" -->
+          Billing Return
+        </button>
+      </div>
+
+      <!-- Language Selector -->
+      <div class="mt-3 sm:mt-0 sm:ml-4"> <!-- Container สำหรับตัวเลือกภาษา จัด margin บนมือถือและ margin ซ้ายบนหน้าจอใหญ่ -->
+        <select id="languageSelector" onchange="changeLanguage(this.value)" class="bg-indigo-700 text-white p-2 rounded-md text-base focus:outline-none focus:ring-2 focus:ring-indigo-500"> <!-- Dropdown สำหรับเลือกภาษา พร้อมสไตล์พื้นหลัง, ข้อความ, padding และ focus -->
+          <option value="en">English</option> <!-- ตัวเลือกภาษาอังกฤษ -->
+          <option value="th">ไทย</option> <!-- ตัวเลือกภาษาไทย -->
+        </select>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main Content Area - Takes remaining vertical space -->
+  <!-- ลบ padding แนวตั้งออก และเปลี่ยนเป็น px สำหรับ padding ซ้าย-ขวาเท่านั้น -->
+  <div class="main-content-area">
+    <!-- Welcome Message (ถูกลบออกเพื่อให้ Power BI เต็มหน้าจอ) -->
+    <!-- <h2 class="text-gray-800 text-3xl sm:text-4xl font-bold mb-6 text-center" id="welcomeMessage" data-key="welcomeMessage">Welcome to Your Warehouse Dashboard!</h2> -->
+
+    <!-- Report Container with Loading Indicator - Now designed for full screen -->
+    <div id="reportContainer" class="w-full bg-gray-200 rounded-xl shadow-xl overflow-hidden relative flex items-center justify-center"> <!-- Container สำหรับแสดงรายงาน Power BI พร้อมความกว้างเต็ม, สีพื้นหลังเทาอ่อน, ขอบโค้ง, เงา, และตำแหน่งแบบ relative สำหรับ spinner -->
+      <!-- Loading spinner -->
+      <div id="loadingSpinner" class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-10 transition-opacity duration-300"> <!-- ส่วนแสดง Loading Spinner ที่อยู่ตรงกลางและทับซ้อนเนื้อหาอื่น -->
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-500"></div> <!-- Spinner แบบหมุน กำหนดขนาด, ทำให้เป็นวงกลม, และสีขอบ -->
+        <p class="ml-4 text-indigo-700 text-lg font-medium" id="loadingText" data-key="loadingText">กำลังโหลดรายงาน...</p> <!-- ข้อความ "กำลังโหลดรายงาน..." -->
+      </div>
+      <!-- Power BI iframe will load here -->
+      <iframe id="powerbiFrame" src="" class="w-full h-full border-none rounded-xl no-scrollbar"></iframe> <!-- iframe สำหรับโหลดรายงาน Power BI พร้อมความกว้าง/สูงเต็ม container, ไม่มีขอบ, ขอบโค้ง, และซ่อน scrollbar -->
+    </div>
+  </div>
+
+  <script>
+    // Object mapping report keys to their Power BI embed URLs
+    const reportUrls = { // อ็อบเจกต์เก็บ URL ของรายงาน Power BI แต่ละประเภท
+      expire: "https://app.powerbi.com/reportEmbed?reportId=1d8bdd77-6059-423b-a02c-f678ac366e5d&autoAuth=true&ctid=6eec918b-f654-44a7-ac1a-abfdb64e694e", // ลิงก์สำหรับรายงานสินค้าหมดอายุ
+      shipment: "https://app.powerbi.com/reportEmbed?reportId=1d8bdd77-6059-423b-a02c-f678ac366e5d&autoAuth=true&ctid=6eec918b-f654-44a7-ac1a-abfdb64e694e",//app.powerbi.com/reportEmbed?reportId=4ea3a579-85f8-403c-93f9-ae90d068dc48&autoAuth=true&ctid=6eec918b-f654-44a7-ac1a-abfdb64e694e" frameborder="0" allowFullScreen="true"></iframe>", // ลิงก์สำหรับรายงาน Daily Shipment
+      inventory: "https://app.powerbi.com/view?r=YOUR_LINK_3", // ลิงก์สำหรับรายงาน Inventory on Hand
+      rop: "https://app.powerbi.com/view?r=YOUR_LINK_4", // ลิงก์สำหรับรายงาน ROP/Max-Min
+      billing: "https://app.powerbi.com/view?r=YOUR_LINK_5" // ลิงก์สำหรับรายงาน Billing Return
+    };
+
+    // Translations object for different languages
+    const translations = { // อ็อบเจกต์เก็บข้อความแปลสำหรับแต่ละภาษา
+      en: { // ข้อความภาษาอังกฤษ
+        pageTitle: "Warehouse Dashboard", // เปลี่ยนเป็น Warehouse Dashboard
+        headerText: "Warehouse Dashboard", // เปลี่ยนเป็น Warehouse Dashboard
+        navButton1: "Expired Products",
+        navButton2: "Daily Shipment",
+        navButton3: "Inventory on Hand",
+        navButton4: "ROP/Max-Min",
+        navButton5: "Billing Return",
+        welcomeMessage: "Welcome to Your Warehouse Dashboard!", // เปลี่ยนเป็น Welcome to Your Warehouse Dashboard!
+        loadingText: "Loading report..."
+      },
+      th: { // ข้อความภาษาไทย
+        pageTitle: "แดชบอร์ดคลังสินค้า", // เปลี่ยนเป็น แดชบอร์ดคลังสินค้า
+        headerText: "แดชบอร์ดคลังสินค้า", // เปลี่ยนเป็น แดชบอร์ดคลังสินค้า
+        navButton1: "สินค้าหมดอายุ",
+        navButton2: "การจัดส่งรายวัน",
+        navButton3: "สินค้าคงคลัง",
+        navButton4: "ROP/สูงสุด-ต่ำสุด",
+        navButton5: "การคืนสินค้าและการเรียกเก็บเงิน",
+        welcomeMessage: "ยินดีต้อนรับสู่แดชบอร์ดคลังสินค้า!", // เปลี่ยนเป็น ยินดีต้อนรับสู่แดชบอร์ดคลังสินค้า!
+        loadingText: "กำลังโหลดรายงาน..."
+      }
+    };
+
+    /**
+     * Function to change the language of the page.
+     * @param {string} lang - The language code ('th' for Thai, 'en' for English).
+     */
+    function changeLanguage(lang) { // ฟังก์ชันสำหรับเปลี่ยนภาษาของหน้าเว็บ
+      const currentTranslations = translations[lang]; // ดึงชุดข้อความแปลสำหรับภาษาที่เลือก
+      if (!currentTranslations) return; // ถ้าไม่มีข้อความแปลสำหรับภาษานั้น ให้หยุดการทำงาน
+
+      // Update page title
+      document.getElementById('pageTitle').textContent = currentTranslations.pageTitle; // อัปเดตชื่อเรื่องของหน้าเว็บ
+
+      // Update all elements with data-key attributes
+      document.querySelectorAll('[data-key]').forEach(element => { // วนลูปผ่านทุกองค์ประกอบที่มีแอตทริบิวต์ data-key
+        const key = element.getAttribute('data-key'); // ดึงค่าของ data-key
+        if (currentTranslations[key]) { // ถ้ามีข้อความแปลสำหรับ key นั้น
+          element.textContent = currentTranslations[key]; // อัปเดตข้อความขององค์ประกอบ
+        }
+      });
+    }
+
+    /**
+     * Function to display the selected Power BI report.
+     * It updates the iframe's src and manages the loading spinner.
+     * @param {string} reportKey - The key corresponding to the desired report URL.
+     */
+    function showReport(reportKey) { // ฟังก์ชันสำหรับแสดงรายงาน Power BI ที่เลือก
+      const iframe = document.getElementById('powerbiFrame'); // อ้างอิงถึง iframe
+      const loadingSpinner = document.getElementById('loadingSpinner'); // อ้างอิงถึง loading spinner
+
+      // Show the loading spinner before setting the new src
+      loadingSpinner.classList.remove('hidden'); // ลบคลาส hidden เพื่อแสดง spinner
+      loadingSpinner.classList.add('flex'); // เพิ่มคลาส flex เพื่อจัดตำแหน่ง spinner ให้อยู่กึ่งกลาง
+
+      // Set the iframe source
+      iframe.src = reportUrls[reportKey]; // กำหนด src ของ iframe ด้วย URL รายงานที่เลือก
+
+      // Hide the loading spinner once the iframe content has loaded
+      iframe.onload = () => { // เมื่อ iframe โหลดเสร็จ
+        loadingSpinner.classList.add('hidden'); // เพิ่มคลาส hidden เพื่อซ่อน spinner
+        loadingSpinner.classList.remove('flex'); // ลบคลาส flex
+      };
+
+      // Optional: Handle errors if iframe fails to load (e.g., invalid URL)
+      iframe.onerror = () => { // หากเกิดข้อผิดพลาดในการโหลด iframe
+        loadingSpinner.classList.add('hidden'); // ซ่อน spinner
+        loadingSpinner.classList.remove('flex'); // ลบคลาส flex
+        console.error("Failed to load Power BI report for key:", reportKey); // แสดงข้อผิดพลาดใน console
+        // คุณอาจต้องการแสดงข้อความข้อผิดพลาดให้ผู้ใช้เห็นที่นี่
+      };
+    }
+
+    // Initial load: Set default language to Thai and hide the spinner
+    document.addEventListener('DOMContentLoaded', () => { // เมื่อ DOM (โครงสร้างเอกสาร) โหลดเสร็จ
+        const loadingSpinner = document.getElementById('loadingSpinner'); // อ้างอิงถึง loading spinner
+        loadingSpinner.classList.add('hidden'); // ซ่อน spinner ตั้งแต่แรก
+        loadingSpinner.classList.remove('flex'); // ลบคลาส flex
+
+        // Set default language to Thai on page load
+        const languageSelector = document.getElementById('languageSelector'); // อ้างอิงถึง dropdown เลือกภาษา
+        languageSelector.value = 'en'; // กำหนดค่าเริ่มต้นของ dropdown เป็น 'th' (ไทย)
+        changeLanguage('en'); // เรียกฟังก์ชันเปลี่ยนภาษาเป็นไทยทันทีที่โหลดหน้า
+    });
+  </script>
+
+</body>
+</html>
