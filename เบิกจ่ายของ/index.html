@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการสต็อกสินค้า</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+        }
+        .modal {
+            display: none; /* Hidden by default */
+        }
+        .modal.show {
+            display: flex; /* Show when 'show' class is added */
+        }
+         /* Simple loading spinner */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div id="app" class="container mx-auto p-4">
+
+        <!-- Header -->
+        <header class="bg-blue-600 text-white p-6 rounded-lg shadow-lg mb-4">
+            <h1 class="text-3xl font-bold">ระบบเบิก-จ่ายสินค้า</h1>
+            <p>จัดการสินค้าคงคลัง การเบิกจ่าย การอนุมัติ และการสั่งซื้อ</p>
+            <div class="mt-2">
+                <span id="user-display">User ID: Loading...</span>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+            <button data-page="products" class="nav-btn bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow transition duration-300 flex items-center justify-center"><i class="fas fa-boxes-stacked mr-2"></i>รายการสินค้า</button>
+            <button data-page="approvals" class="nav-btn bg-green-500 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg shadow transition duration-300 flex items-center justify-center"><i class="fas fa-check-circle mr-2"></i>รออนุมัติ</button>
+            <button data-page="orders" class="nav-btn bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-3 px-4 rounded-lg shadow transition duration-300 flex items-center justify-center"><i class="fas fa-shopping-cart mr-2"></i>สั่งซื้อสินค้า</button>
+            <button data-page="receiving" class="nav-btn bg-teal-500 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg shadow transition duration-300 flex items-center justify-center"><i class="fas fa-truck-ramp-box mr-2"></i>รับสินค้า</button>
+            <button data-page="export" class="nav-btn bg-gray-500 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg shadow transition duration-300 flex items-center justify-center"><i class="fas fa-file-excel mr-2"></i>Export ข้อมูล</button>
+            <button data-page="admin" class="nav-btn bg-red-500 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow transition duration-300 flex items-center justify-center"><i class="fas fa-user-shield mr-2"></i>Admin</button>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main id="main-content" class="bg-white p-6 rounded-lg shadow-lg min-h-[60vh]">
+            <!-- Pages will be rendered here by JavaScript -->
+        </main>
+
+        <!-- Cart Floating Button -->
+        <div id="cart-button-container" class="fixed bottom-6 right-6">
+             <button id="cart-button" class="bg-indigo-600 text-white rounded-full w-16 h-16 flex items-center justify-center shadow-xl hover:bg-indigo-700 transition duration-300">
+                <i class="fas fa-shopping-basket text-2xl"></i>
+                <span id="cart-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center">0</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modals (Pop-ups) -->
+    <div id="employee-id-modal" class="modal fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
+            <h3 class="text-2xl font-bold mb-4">ยืนยันการเบิก</h3>
+            <p class="mb-4">กรุณาใส่รหัสพนักงานเพื่อดำเนินการต่อ</p>
+            <input type="password" id="employee-id-input" class="w-full p-2 border rounded mb-4" placeholder="รหัสพนักงาน">
+            <div id="employee-info" class="mb-4 hidden">
+                 <p class="text-lg">ชื่อผู้เบิก: <span id="employee-name" class="font-semibold"></span></p>
+            </div>
+            <div id="requisition-loader" class="hidden my-4"><div class="loader"></div></div>
+            <div class="flex justify-end space-x-4">
+                <button id="cancel-requisition-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">ยกเลิก</button>
+                <button id="confirm-requisition-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded" disabled>ยืนยัน</button>
+            </div>
+        </div>
+    </div>
+    <div id="permission-modal" class="modal fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
+            <h3 class="text-2xl font-bold mb-4">ต้องการสิทธิ์การเข้าถึง</h3>
+            <p class="mb-4">กรุณาใส่รหัสพนักงานเพื่อเข้าถึงหน้านี้</p>
+            <input type="password" id="permission-id-input" class="w-full p-2 border rounded mb-4" placeholder="รหัสพนักงาน">
+            <p id="permission-error" class="text-red-500 text-sm mb-4 hidden"></p>
+            <div class="flex justify-end space-x-4">
+                <button id="cancel-permission-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">ยกเลิก</button>
+                <button id="confirm-permission-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">ตกลง</button>
+            </div>
+        </div>
+    </div>
+    <div id="cart-summary-modal" class="modal fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-lg">
+            <h3 class="text-2xl font-bold mb-4">สรุปรายการในตะกร้า</h3>
+            <div id="cart-summary-content" class="max-h-96 overflow-y-auto mb-4"></div>
+            <div class="flex justify-between items-center">
+                 <button id="close-cart-summary-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">ปิด</button>
+                 <button id="proceed-to-requisition-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">เบิกสินค้า</button>
+            </div>
+        </div>
+    </div>
+    <div id="info-modal" class="modal fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm text-center">
+            <h3 id="info-modal-title" class="text-2xl font-bold mb-4">สำเร็จ</h3>
+            <p id="info-modal-message" class="mb-6"></p>
+            <button id="info-modal-close-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded">ตกลง</button>
+        </div>
+    </div>
+    <div id="confirm-modal" class="modal fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
+            <h3 id="confirm-modal-title" class="text-2xl font-bold mb-4">ยืนยันการกระทำ</h3>
+            <p id="confirm-modal-message" class="mb-6"></p>
+            <div class="flex justify-end space-x-4">
+                <button id="confirm-modal-cancel-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">ยกเลิก</button>
+                <button id="confirm-modal-confirm-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">ยืนยัน</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, collection, onSnapshot, query, where, writeBatch, Timestamp, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Firebase Storage modules ไม่จำเป็นต้องใช้สำหรับการเก็บรูปภาพใน Local Server
+        // import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDl6peuuo9It_GHjB-be3Jx9qSSxctwp5M",
+  authDomain: "inventory-management-sys-81e44.firebaseapp.com",
+  projectId: "inventory-management-sys-81e44",
+  storageBucket: "inventory-management-sys-81e44.firebasestorage.app",
+  messagingSenderId: "294306719168",
+  appId: "1:294306719168:web:b192b464dc8aa88c8b9425",
+  measurementId: "G-DRSJ6J1TK8"
+};
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        // const storage = getStorage(app); // ไม่จำเป็นต้องใช้ Firebase Storage
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-stock-app';
+        
+        let currentUser = null;
+        let userAccess = { name: 'Guest', permissions: {} };
+        let unsubscribePOListener = null;
+        let unsubscribeApprovalListener = null;
+
+        const state = {
+            currentPage: 'products',
+            products: [],
+            users: [],
+            cart: {}, 
+            purchaseOrders: [],
+            generatedPO: null, // Stores the PO generated by auto-create, allowing edits
+        };
+
+        const mainContent = document.getElementById('main-content');
+        const navButtons = document.querySelectorAll('.nav-btn');
+        const cartButton = document.getElementById('cart-button');
+        const cartCount = document.getElementById('cart-count');
+        const employeeIdModal = document.getElementById('employee-id-modal');
+        const permissionModal = document.getElementById('permission-modal');
+        const cartSummaryModal = document.getElementById('cart-summary-modal');
+        const infoModal = document.getElementById('info-modal');
+        const confirmModal = document.getElementById('confirm-modal');
+
+        // Page content definitions
+        const pages = {
+            products: () => {
+                let content = `<h2 class="text-2xl font-bold mb-4">รายการสินค้า</h2>`;
+                if(state.products.length === 0) {
+                    content += `<div class="loader"></div> <p class="text-center mt-2">กำลังโหลดข้อมูลสินค้า...</p>`;
+                } else {
+                    content += `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">`;
+                    state.products.forEach(p => {
+                        // รูปภาพสินค้า: ใช้ w-full h-40 object-cover เพื่อปรับขนาดให้เต็มพื้นที่และคงอัตราส่วน
+                        // URL รูปภาพจะมาจาก Path สัมพัทธ์ที่เก็บใน Firestore
+                        content += `
+                            <div class="border rounded-lg p-4 shadow-md bg-white flex flex-col">
+                                <img src="${p.imageUrl || 'https://placehold.co/400x300/e2e8f0/cbd5e0?text=No+Image'}" alt="${p.name}" class="w-full h-32 object-contain rounded-md mb-4">
+                                <h3 class="text-base font-semibold mb-2">${p.name}</h3>
+                                <p class="text-gray-600 mb-4 flex-grow">คงเหลือ: <span class="font-bold text-blue-700">${p.stock}</span> ชิ้น</p>
+                                <div class="flex items-center space-x-2">
+                                    <input type="number" id="qty-${p.id}" class="w-20 p-2 border rounded" value="1" min="1" max="${p.stock}">
+                                    <button class="add-to-cart-btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300 w-full" data-id="${p.id}" ${p.stock === 0 ? 'disabled' : ''}>
+                                        <i class="fas fa-cart-plus mr-1"></i> ${p.stock === 0 ? 'สินค้าหมด' : 'เลือก'}
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    content += `</div>`;
+                }
+                return content;
+            },
+            approvals: () => `<h2 class="text-2xl font-bold mb-4">รายการรออนุมัติ</h2><div id="approval-list"><div class="loader"></div><p class="text-center mt-2">กำลังโหลดข้อมูล...</p></div>`,
+            orders: () => {
+                const productRows = state.products.map(p => `
+                    <tr class="border-b ${p.stock <= p.min ? 'bg-red-100' : 'hover:bg-gray-50'}">
+                        <td class="p-2">${p.name}</td><td class="p-2 text-center">${p.stock}</td>
+                        <td class="p-2 text-center">${p.min}</td><td class="p-2 text-center">${p.max}</td>
+                        <td class="p-2">${p.vendor || '-'}</td><td class="p-2 text-right">${(p.price || 0).toFixed(2)}</td>
+                    </tr>`).join('');
+
+                let poSummary = '<p class="text-gray-500">ยังไม่มีการสร้างใบสั่งซื้อ</p>';
+                if(state.generatedPO) {
+                    let currentTotal = 0;
+                    const poItems = Object.entries(state.generatedPO.items).map(([productId, item]) => {
+                        const itemTotal = (item.price * item.orderQty) || 0;
+                        currentTotal += itemTotal;
+                        return `
+                            <tr class="border-b">
+                                <td class="p-2">${item.name}</td>
+                                <td class="p-2 text-center">
+                                    <input type="number" data-id="${productId}" data-field="orderQty" value="${item.orderQty}" min="1" class="po-edit-input w-20 p-1 border rounded text-center">
+                                </td>
+                                <td class="p-2 text-right">
+                                    <input type="number" data-id="${productId}" data-field="price" value="${item.price}" step="0.01" class="po-edit-input w-24 p-1 border rounded text-right">
+                                </td>
+                                <td class="p-2 text-center">
+                                    <input type="text" data-id="${productId}" data-field="vendor" value="${item.vendor || ''}" class="po-edit-input w-24 p-1 border rounded text-center">
+                                </td>
+                                <td class="p-2 text-right font-semibold">${itemTotal.toFixed(2)}</td>
+                            </tr>`;
+                    }).join('');
+                    
+                    poSummary = `
+                        <table class="w-full text-left">
+                            <thead class="bg-gray-200">
+                                <tr>
+                                    <th class="p-2">สินค้า</th>
+                                    <th class="p-2 text-center">จำนวนสั่ง</th>
+                                    <th class="p-2 text-right">ราคาต่อหน่วย</th>
+                                    <th class="p-2 text-center">Vender</th>
+                                    <th class="p-2 text-right">ราคารวม</th>
+                                </tr>
+                            </thead>
+                            <tbody>${poItems}</tbody>
+                            <tfoot>
+                                <tr class="font-bold bg-gray-100">
+                                    <td colspan="4" class="p-2 text-right">ยอดรวมทั้งหมด:</td>
+                                    <td class="p-2 text-right" id="po-total">${currentTotal.toFixed(2)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        <div class="mt-4 flex flex-wrap items-center space-x-4">
+                             <label class="mb-2">กำหนดวันจัดซื้อ: <input type="date" id="purchase-date" class="p-2 border rounded" value="${new Date().toISOString().substring(0, 10)}"></label>
+                            <button id="confirm-po-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-2">ยืนยันการสั่งซื้อ</button>
+                        </div>`;
+                }
+
+                return `
+                    <h2 class="text-2xl font-bold mb-4">สั่งซื้อสินค้า</h2>
+                    <div class="mb-6"><button id="generate-po-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"><i class="fas fa-cogs mr-2"></i>สร้างใบสั่งซื้ออัตโนมัติ</button></div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white p-4 rounded-lg border"><h3 class="text-xl font-semibold mb-3">รายการสินค้าทั้งหมด</h3><div class="max-h-96 overflow-y-auto"><table class="w-full text-left text-sm"><thead class="bg-gray-200 sticky top-0"><tr><th class="p-2">ชื่อ</th><th class="p-2 text-center">คงเหลือ</th><th class="p-2 text-center">Min</th><th class="p-2 text-center">Max</th><th class="p-2 text-center">Vender</th><th class="p-2 text-right">ราคา</th></tr></thead><tbody>${productRows}</tbody></table></div></div>
+                        <div class="bg-gray-50 p-4 rounded-lg border"><h3 class="text-xl font-semibold mb-3">สรุปใบสั่งซื้อ (PO)</h3><div id="po-summary">${poSummary}</div></div>
+                    </div>`;
+            },
+            receiving: () => `<h2 class="text-2xl font-bold mb-4">รับสินค้าเข้าคลัง</h2><div id="receiving-list"><div class="loader"></div><p class="text-center mt-2">กำลังโหลดข้อมูล...</p></div>`,
+            export: () => `<h2 class="text-2xl font-bold mb-4">Export ข้อมูลเป็น Excel</h2><div class="space-y-4 flex flex-col"><button id="export-requisitions-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded"><i class="fas fa-file-download mr-2"></i>Export รายการเบิกและอนุมัติ</button><button id="export-orders-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded mt-2"><i class="fas fa-file-download mr-2"></i>Export รายการสั่งซื้อและรับเข้า</button><button id="export-all-stock-btn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded mt-2"><i class="fas fa-file-excel mr-2"></i>Export สินค้าคงเหลือทั้งหมด</button></div>`,
+            admin: () => {
+                let userRows = state.users.map(user => `<tr class="border-b hover:bg-gray-50"><td class="p-2">${user.id}</td><td class="p-2">${user.name}</td><td class="p-2"><label class="mr-2"><input type="checkbox" data-uid="${user.id}" data-permission="canApprove" ${user.permissions.canApprove ? 'checked' : ''} class="permission-checkbox mr-1">อนุมัติ</label><label class="mr-2"><input type="checkbox" data-uid="${user.id}" data-permission="canOrder" ${user.permissions.canOrder ? 'checked' : ''} class="permission-checkbox mr-1">สั่งซื้อ</label><label class="mr-2"><input type="checkbox" data-uid="${user.id}" data-permission="canReceive" ${user.permissions.canReceive ? 'checked' : ''} class="permission-checkbox mr-1">รับของ</label><label class="mr-2"><input type="checkbox" data-uid="${user.id}" data-permission="isAdmin" ${user.permissions.isAdmin ? 'checked' : ''} class="permission-checkbox mr-1">Admin</label></td></tr>`).join('');
+                let productRows = state.products.map(p => `<tr class="border-b hover:bg-gray-50"><td class="p-2">${p.name}</td><td class="p-2">${p.stock}</td><td class="p-2 text-right"><button class="edit-product-btn bg-yellow-500 hover:bg-yellow-600 text-white text-sm py-1 px-3 rounded" data-id="${p.id}">แก้ไข</button></td></tr>`).join('');
+                return `
+                    <h2 class="text-2xl font-bold mb-4">หน้า Admin</h2>
+                    <div id="product-form-container" class="bg-gray-50 p-4 rounded-lg mb-6 border border-gray-200">
+                        <h3 class="text-xl font-semibold mb-3">จัดการสินค้า (เพิ่ม/แก้ไข)</h3>
+                        <form id="product-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="hidden" id="product-id">
+                            <input id="product-name" type="text" placeholder="ชื่อสินค้า" class="p-2 border rounded" required>
+                            <input id="product-stock" type="number" placeholder="จำนวนคงเหลือ" class="p-2 border rounded" required>
+                            <input id="product-min" type="number" placeholder="Min Stock" class="p-2 border rounded">
+                            <input id="product-max" type="number" placeholder="Max Stock" class="p-2 border rounded">
+                            <input id="product-vendor" type="text" placeholder="รหัส Vender" class="p-2 border rounded">
+                            <input id="product-price" type="number" placeholder="ราคา" class="p-2 border rounded" step="0.01">
+                            <!-- เปลี่ยนช่อง URL รูปภาพเป็น Path สัมพัทธ์ และลบช่องอัปโหลดไฟล์ออก -->
+                            <input id="product-image" type="text" placeholder="Path รูปภาพ (เช่น images/product1.jpg)" class="p-2 border rounded col-span-1 md:col-span-2">
+                            <p class="text-sm text-gray-600 col-span-1 md:col-span-2">
+                                * สำหรับรูปภาพ: กรุณาคัดลอกไฟล์รูปภาพไปวางในโฟลเดอร์ 'images' บน Server ของคุณด้วยตนเอง แล้วใส่ Path สัมพัทธ์ที่นี่ (เช่น 'images/ชื่อรูป.jpg')
+                            </p>
+                            <div class="col-span-1 md:col-span-2 flex items-center space-x-4">
+                                <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">บันทึกสินค้า</button>
+                                <button type="button" id="clear-product-form" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded">ล้างฟอร์ม</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg mb-6 border border-gray-200">
+                        <h3 class="text-xl font-semibold mb-3">รายการสินค้าทั้งหมด</h3>
+                        <div class="max-h-96 overflow-y-auto">
+                            <table class="w-full text-left">
+                                <thead class="bg-gray-200 sticky top-0">
+                                    <tr><th class="p-2">ชื่อสินค้า</th><th class="p-2">คงเหลือ</th><th class="p-2"></th></tr>
+                                </thead>
+                                <tbody>${productRows}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border border-gray-200">
+                        <h3 class="text-xl font-semibold mb-3">จัดการผู้ใช้งานและสิทธิ์</h3>
+                        <form id="user-form" class="flex flex-wrap gap-4 mb-4">
+                            <input id="user-id" type="text" placeholder="รหัสพนักงาน" class="p-2 border rounded" required>
+                            <input id="user-name" type="text" placeholder="ชื่อ-สกุล" class="p-2 border rounded" required>
+                            <button type="submit" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded">เพิ่มผู้ใช้</button>
+                        </form>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="bg-gray-200">
+                                    <tr><th class="p-2">รหัส</th><th class="p-2">ชื่อ</th><th class="p-2">สิทธิ์</th></tr>
+                                </thead>
+                                <tbody id="user-list">${userRows}</tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            },
+        };
+
+        // Function to render the current page content
+        const render = () => {
+            const pageFunction = pages[state.currentPage] || pages.products;
+            mainContent.innerHTML = pageFunction();
+            updateCartCount();
+            addEventListeners();
+            
+            // Start listening to specific collections when on relevant pages
+            if (state.currentPage === 'approvals' && !unsubscribeApprovalListener) {
+                listenToApprovals();
+            }
+            if (state.currentPage === 'receiving' && !unsubscribePOListener) {
+                listenToPurchaseOrders();
+            }
+        };
+
+        // Function to update the cart item count displayed on the button
+        const updateCartCount = () => {
+            const count = Object.values(state.cart).reduce((sum, qty) => sum + qty, 0);
+            cartCount.textContent = count;
+            // Show cart button only on the products page
+            cartButton.style.display = state.currentPage === 'products' ? 'flex' : 'none';
+        };
+
+        // Generic function to show an info modal
+        const showInfoModal = (title, message) => {
+            document.getElementById('info-modal-title').textContent = title;
+            document.getElementById('info-modal-message').textContent = message;
+            infoModal.classList.add('show');
+            document.getElementById('info-modal-close-btn').onclick = () => infoModal.classList.remove('show');
+        };
+
+        // Generic function to show a confirmation modal
+        const showConfirmModal = (title, message, onConfirm) => {
+            document.getElementById('confirm-modal-title').textContent = title;
+            document.getElementById('confirm-modal-message').textContent = message;
+            confirmModal.classList.add('show');
+            const confirmBtn = document.getElementById('confirm-modal-confirm-btn');
+            const cancelBtn = document.getElementById('confirm-modal-cancel-btn');
+            const cleanup = () => {
+                confirmModal.classList.remove('show');
+                confirmBtn.onclick = null;
+                cancelBtn.onclick = null;
+            };
+            cancelBtn.onclick = cleanup;
+            confirmBtn.onclick = () => { cleanup(); onConfirm(); };
+        };
+        
+        // Function to add all necessary event listeners for the current page
+        function addEventListeners() {
+            navButtons.forEach(button => button.addEventListener('click', () => navigateTo(button.dataset.page)));
+            if (state.currentPage === 'products') {
+                document.querySelectorAll('.add-to-cart-btn').forEach(btn => btn.addEventListener('click', handleAddToCart));
+                cartButton.addEventListener('click', showCartSummaryModal);
+            }
+            if (state.currentPage === 'admin') {
+                document.getElementById('product-form').addEventListener('submit', handleProductFormSubmit);
+                document.getElementById('user-form').addEventListener('submit', handleUserFormSubmit);
+                document.getElementById('clear-product-form').addEventListener('click', clearProductForm);
+                document.querySelectorAll('.permission-checkbox').forEach(cb => cb.addEventListener('change', handlePermissionChange));
+                document.querySelectorAll('.edit-product-btn').forEach(btn => btn.addEventListener('click', (e) => loadProductForEdit(e.currentTarget.dataset.id)));
+            }
+            if(state.currentPage === 'export') {
+                document.getElementById('export-requisitions-btn').addEventListener('click', exportRequisitions);
+                document.getElementById('export-orders-btn').addEventListener('click', exportPurchaseOrders);
+                document.getElementById('export-all-stock-btn').addEventListener('click', exportAllStock); // New button listener
+            }
+            if(state.currentPage === 'orders') {
+                document.getElementById('generate-po-btn').addEventListener('click', handleAutoGeneratePO);
+                if (state.generatedPO) {
+                    document.getElementById('confirm-po-btn').addEventListener('click', handleConfirmPO);
+                    // Add event listeners for the new editable inputs in PO summary
+                    document.querySelectorAll('.po-edit-input').forEach(input => {
+                        input.addEventListener('change', handlePOItemEdit);
+                        input.addEventListener('input', handlePOItemEdit); // For real-time updates
+                    });
+                }
+            }
+        }
+        
+        // Function to navigate between pages
+        const navigateTo = (page) => {
+            // Unsubscribe from previous listeners to prevent memory leaks and duplicate calls
+            if (unsubscribeApprovalListener) {
+                unsubscribeApprovalListener();
+                unsubscribeApprovalListener = null;
+            }
+            if (unsubscribePOListener) {
+                unsubscribePOListener();
+                unsubscribePOListener = null;
+            }
+            
+            const restrictedPages = { approvals: 'canApprove', orders: 'canOrder', receiving: 'canReceive', admin: 'isAdmin' };
+            const hasPermission = userAccess.permissions.isAdmin || userAccess.permissions[restrictedPages[page]];
+            
+            // If the page is restricted and the user doesn't have permission, show permission modal
+            if (restrictedPages[page] && !hasPermission) {
+                showPermissionModal(page, restrictedPages[page]);
+            } else {
+                state.currentPage = page;
+                render();
+            }
+        };
+
+        // Function to show the permission modal for restricted pages
+        const showPermissionModal = (targetPage, requiredPermission) => {
+            permissionModal.classList.add('show');
+            const confirmBtn = document.getElementById('confirm-permission-btn');
+            const cancelBtn = document.getElementById('cancel-permission-btn');
+            const input = document.getElementById('permission-id-input');
+            const errorMsg = document.getElementById('permission-error');
+            input.value = ''; // Clear input
+            errorMsg.classList.add('hidden'); // Hide error message initially
+
+            const onConfirm = async () => {
+                const employeeId = input.value;
+                if (!employeeId) return; // Do nothing if input is empty
+
+                const user = state.users.find(u => u.id === employeeId);
+                
+                // ถ้าหน้าที่ต้องการเข้าคือ 'admin'
+                if (targetPage === 'admin') {
+                    // ตรวจสอบว่าผู้ใช้ที่กรอกรหัสมานั้นมีสิทธิ์ isAdmin เป็น true หรือไม่
+                    if (user && user.permissions.isAdmin) {
+                         userAccess = { name: user.name, permissions: user.permissions }; // กำหนดสิทธิ์ผู้ใช้ปัจจุบันเป็น Admin
+                         updateUserDisplay(user.name, 'Admin');
+                         closeAndNavigate(targetPage);
+                    } else if (user) {
+                        // ผู้ใช้มีอยู่แต่ไม่มีสิทธิ์ Admin
+                        errorMsg.textContent = 'คุณไม่มีสิทธิ์เข้าถึงหน้านี้ในฐานะ Admin';
+                        errorMsg.classList.remove('hidden');
+                    } else {
+                        // ไม่พบผู้ใช้ด้วยรหัสที่กรอก
+                        errorMsg.textContent = 'รหัสพนักงานไม่ถูกต้อง';
+                        errorMsg.classList.remove('hidden');
+                    }
+                } else {
+                    // สำหรับหน้าอื่นๆ ที่มีการจำกัดสิทธิ์ (approvals, orders, receiving)
+                    // ตรวจสอบว่าผู้ใช้มีสิทธิ์ที่จำเป็นสำหรับหน้านั้นๆ หรือมีสิทธิ์ isAdmin
+                    if (user && (user.permissions[requiredPermission] || user.permissions.isAdmin)) {
+                        userAccess = { name: user.name, permissions: user.permissions };
+                        updateUserDisplay(user.name, targetPage);
+                        closeAndNavigate(targetPage);
+                    } else if(user) {
+                         errorMsg.textContent = 'คุณไม่มีสิทธิ์เข้าถึงหน้านี้';
+                         errorMsg.classList.remove('hidden');
+                    } else {
+                        errorMsg.textContent = 'รหัสพนักงานไม่ถูกต้อง';
+                        errorMsg.classList.remove('hidden');
+                    }
+                }
+            };
+
+            const onCancel = () => {
+                 permissionModal.classList.remove('show');
+                 confirmBtn.onclick = null; 
+                 cancelBtn.onclick = null;
+            };
+
+            const closeAndNavigate = (page) => {
+                 state.currentPage = page; 
+                 render(); 
+                 permissionModal.classList.remove('show');
+                 confirmBtn.onclick = null; 
+                 cancelBtn.onclick = null;
+            }
+
+            confirmBtn.onclick = onConfirm;
+            cancelBtn.onclick = onCancel;
+        };
+        
+        // Handles adding a product to the cart
+        const handleAddToCart = (e) => {
+            const productId = e.currentTarget.dataset.id;
+            const qtyInput = document.getElementById(`qty-${productId}`);
+            const quantity = parseInt(qtyInput.value, 10);
+
+            if (isNaN(quantity) || quantity <= 0) {
+                 showInfoModal('ผิดพลาด', 'กรุณาใส่จำนวนที่ถูกต้อง'); 
+                 return;
+            };
+
+            const product = state.products.find(p => p.id === productId);
+            if (quantity > product.stock) {
+                 showInfoModal('สินค้าไม่พอ', 'จำนวนที่เลือกมากกว่าสินค้าคงเหลือ'); 
+                 return;
+            }
+
+            state.cart[productId] = (state.cart[productId] || 0) + quantity;
+            showInfoModal('สำเร็จ',`เพิ่ม ${product.name} จำนวน ${quantity} ชิ้นเรียบร้อย`);
+            updateCartCount();
+        };
+        
+        // Shows the cart summary modal
+        const showCartSummaryModal = () => {
+             cartSummaryModal.classList.add('show');
+             const content = document.getElementById('cart-summary-content');
+
+             if(Object.keys(state.cart).length === 0) {
+                 content.innerHTML = '<p class="text-center">ตะกร้าสินค้าว่างเปล่า</p>';
+                 document.getElementById('proceed-to-requisition-btn').style.display = 'none';
+             } else {
+                document.getElementById('proceed-to-requisition-btn').style.display = 'block';
+                 let html = `<div class="divide-y divide-gray-200">`;
+                 for(const [productId, quantity] of Object.entries(state.cart)) {
+                     const product = state.products.find(p => p.id === productId);
+                     html += `<div class="py-2 flex justify-between items-center"><span>${product ? product.name : `สินค้าไม่ทราบ (${pid})`}</span><span class="font-semibold">${quantity} ชิ้น</span></div>`;
+                 }
+                 html += `</div>`;
+                 content.innerHTML = html;
+             }
+             document.getElementById('close-cart-summary-btn').onclick = () => cartSummaryModal.classList.remove('show');
+             document.getElementById('proceed-to-requisition-btn').onclick = () => { cartSummaryModal.classList.remove('show'); showEmployeeIdModal(); };
+        };
+
+        // Shows the employee ID modal for requisition confirmation
+        const showEmployeeIdModal = () => {
+            employeeIdModal.classList.add('show');
+            const input = document.getElementById('employee-id-input');
+            const confirmBtn = document.getElementById('confirm-requisition-btn');
+            const employeeInfoDiv = document.getElementById('employee-info');
+            const employeeNameSpan = document.getElementById('employee-name');
+            const loader = document.getElementById('requisition-loader');
+
+            input.value = ''; 
+            confirmBtn.disabled = true; 
+            employeeInfoDiv.classList.add('hidden');
+
+            let debounceTimer;
+            input.onkeyup = () => {
+                clearTimeout(debounceTimer); 
+                confirmBtn.disabled = true; 
+                employeeInfoDiv.classList.add('hidden');
+                if (input.value.trim() === '') return;
+
+                debounceTimer = setTimeout(async () => {
+                    loader.classList.remove('hidden');
+                    const user = state.users.find(u => u.id === input.value);
+                    loader.classList.add('hidden');
+                    if (user) {
+                        employeeNameSpan.textContent = user.name;
+                        employeeInfoDiv.classList.remove('hidden'); 
+                        confirmBtn.disabled = false;
+                    } else {
+                        employeeNameSpan.textContent = ''; 
+                        employeeInfoDiv.classList.add('hidden');
+                    }
+                }, 500);
+            };
+            document.getElementById('cancel-requisition-btn').onclick = () => employeeIdModal.classList.remove('show');
+            document.getElementById('confirm-requisition-btn').onclick = handleConfirmRequisition;
+        };
+        
+        // Handles the confirmation of a requisition
+        const handleConfirmRequisition = async () => {
+            const employeeId = document.getElementById('employee-id-input').value;
+            const user = state.users.find(u => u.id === employeeId);
+            if (!user || Object.keys(state.cart).length === 0) {
+                showInfoModal('ผิดพลาด', 'ข้อมูลไม่ถูกต้อง หรือตะกร้าว่างเปล่า'); 
+                return;
+            }
+            try {
+                const invNumber = `INV-${Date.now()}`;
+                await addDoc(collection(db, `artifacts/${appId}/public/data/requisitions`), {
+                    invNumber, 
+                    requesterId: user.id, 
+                    requesterName: user.name, 
+                    items: state.cart,
+                    status: 'pending', 
+                    createdAt: serverTimestamp()
+                });
+                showInfoModal('สำเร็จ', `สร้างใบเบิก ${invNumber} สำเร็จแล้ว`);
+                state.cart = {}; 
+                updateCartCount(); 
+                employeeIdModal.classList.remove('show');
+            } catch (error) {
+                console.error("Error creating requisition: ", error);
+                showInfoModal('ผิดพลาด', 'เกิดข้อผิดพลาดในการสร้างใบเบิก');
+            }
+        };
+
+        // Renders the list of pending approvals
+        function renderApprovalList(approvals) {
+            const listEl = document.getElementById('approval-list');
+            if (!listEl) return;
+
+            if (approvals.length === 0) {
+                listEl.innerHTML = '<p class="text-center text-gray-500">ไม่มีรายการรออนุมัติ</p>';
+                return;
+            }
+            
+            let html = '<div class="space-y-4">';
+            approvals.forEach(req => {
+                let itemsHtml = '<ul class="list-disc list-inside mt-2 text-sm">';
+                for (const [pid, qty] of Object.entries(req.items)) {
+                    const product = state.products.find(p => p.id === pid);
+                    itemsHtml += `<li>${product ? product.name : 'Unknown Product'} : ${qty} ชิ้น</li>`;
+                }
+                itemsHtml += '</ul>';
+                html += `<div class="border p-4 rounded-lg bg-gray-50 shadow-sm"><div class="flex justify-between items-start"><div><h4 class="font-bold text-lg">${req.invNumber}</h4><p class="text-sm">ผู้เบิก: ${req.requesterName} (${req.requesterId})</p></div><span class="text-xs text-gray-500">${req.createdAt ? new Date(req.createdAt.toDate()).toLocaleString('th-TH') : 'N/A'}</span></div><div class="mt-2 p-2 bg-white rounded border">${itemsHtml}</div><div class="text-right mt-4"><button data-id="${req.id}" class="approve-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">อนุมัติ</button></div></div>`;
+            });
+            html += '</div>';
+            listEl.innerHTML = html;
+            document.querySelectorAll('.approve-btn').forEach(btn => btn.addEventListener('click', handleApprove));
+        }
+
+        // Listens to real-time updates for pending approvals
+        function listenToApprovals() {
+            const q = query(collection(db, `artifacts/${appId}/public/data/requisitions`), where("status", "==", "pending"));
+            unsubscribeApprovalListener = onSnapshot(q, (snapshot) => {
+                const approvals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderApprovalList(approvals);
+            }, (error) => {
+                 console.error("Error listening to approvals: ", error);
+                 const listEl = document.getElementById('approval-list');
+                 if (listEl) listEl.innerHTML = '<p class="text-red-500">เกิดข้อผิดพลาดในการโหลดข้อมูล</p>';
+            });
+        }
+        
+        // Handles the approval of a requisition
+        const handleApprove = async (e) => {
+            const reqId = e.currentTarget.dataset.id;
+            if (!userAccess.permissions.canApprove && !userAccess.permissions.isAdmin) {
+                showInfoModal('ไม่มีสิทธิ์', 'คุณไม่มีสิทธิ์ในการอนุมัติรายการ'); 
+                return;
+            }
+            const reqDocRef = doc(db, `artifacts/${appId}/public/data/requisitions`, reqId);
+            const reqDocSnapshot = await getDoc(reqDocRef);
+            if (!reqDocSnapshot.exists() || reqDocSnapshot.data().status !== 'pending') {
+                showInfoModal('ผิดพลาด', 'รายการนี้ไม่อยู่ในสถานะรออนุมัติแล้ว'); 
+                return;
+            }
+            const doApproval = async () => {
+                try {
+                    const itemsToUpdate = reqDocSnapshot.data().items;
+                    const batch = writeBatch(db);
+                    for (const [productId, quantity] of Object.entries(itemsToUpdate)) {
+                         const product = state.products.find(p => p.id === productId);
+                         if (!product || product.stock < quantity) throw new Error(`สินค้า ${product?.name || productId} มีไม่พอ (ต้องการ ${quantity}, เหลือ ${product?.stock || 0})`);
+                         const productRef = doc(db, `artifacts/${appId}/public/data/products`, productId);
+                         batch.update(productRef, { stock: product.stock - quantity });
+                    }
+                    batch.update(reqDocRef, { status: 'approved', approvedBy: userAccess.name, approvedAt: serverTimestamp() });
+                    await batch.commit();
+                    showInfoModal('สำเร็จ', 'อนุมัติ และตัดสต็อกเรียบร้อย');
+                } catch (error) {
+                     console.error("Error approving requisition: ", error);
+                     showInfoModal('เกิดข้อผิดพลาด', error.message);
+                }
+            };
+            showConfirmModal('ยืนยันการอนุมัติ', 'คุณต้องการอนุมัติรายการเบิกนี้ใช่หรือไม่? การกระทำนี้จะทำการตัดสต็อกทันที', doApproval);
+        };
+
+        // --- Order & Receive Logic ---
+        // Generates a purchase order automatically based on low stock
+        const handleAutoGeneratePO = () => {
+            const itemsToOrder = {};
+            state.products.forEach(p => {
+                if(p.stock <= p.min) {
+                    const orderQty = (p.max || p.min) - p.stock;
+                    if(orderQty > 0) {
+                        // Use product's current price and vendor as initial values for the PO
+                        itemsToOrder[p.id] = { name: p.name, vendor: p.vendor || '', price: p.price || 0, orderQty };
+                    }
+                }
+            });
+
+            if(Object.keys(itemsToOrder).length === 0) {
+                showInfoModal("ไม่ต้องสั่งซื้อ", "ไม่มีสินค้าที่ถึงจุดสั่งซื้อ (Stock <= Min)");
+                return;
+            }
+            state.generatedPO = { items: itemsToOrder };
+            render(); // Re-render to show the editable PO summary
+        };
+
+        // Function to handle changes in the editable PO items (quantity, price, vendor)
+        const handlePOItemEdit = (e) => {
+            const productId = e.target.dataset.id;
+            const field = e.target.dataset.field;
+            let value = e.target.value;
+
+            if (field === 'orderQty' || field === 'price') {
+                value = parseFloat(value);
+                // Revert to previous valid value or 0 if input is invalid
+                if (isNaN(value) || value < 0) {
+                    value = state.generatedPO.items[productId][field]; 
+                    e.target.value = value; // Update input field to show the reverted value
+                    return; 
+                }
+            }
+
+            if (state.generatedPO && state.generatedPO.items[productId]) {
+                state.generatedPO.items[productId][field] = value;
+                updatePOSummaryDisplay(); // Update only the PO summary section
+            }
+        };
+
+        // Function to update the PO summary display and total calculation
+        const updatePOSummaryDisplay = () => {
+            const poSummaryDiv = document.getElementById('po-summary');
+            if (!poSummaryDiv || !state.generatedPO) return;
+
+            let currentTotal = 0;
+            const poItemsHtml = Object.entries(state.generatedPO.items).map(([productId, item]) => {
+                const itemTotal = (item.price * item.orderQty) || 0;
+                currentTotal += itemTotal;
+                return `
+                    <tr class="border-b">
+                        <td class="p-2">${item.name}</td>
+                        <td class="p-2 text-center">
+                            <input type="number" data-id="${productId}" data-field="orderQty" value="${item.orderQty}" min="1" class="po-edit-input w-20 p-1 border rounded text-center">
+                        </td>
+                        <td class="p-2 text-right">
+                            <input type="number" data-id="${productId}" data-field="price" value="${item.price}" step="0.01" class="po-edit-input w-24 p-1 border rounded text-right">
+                        </td>
+                        <td class="p-2 text-center">
+                            <input type="text" data-id="${productId}" data-field="vendor" value="${item.vendor || ''}" class="po-edit-input w-24 p-1 border rounded text-center">
+                        </td>
+                        <td class="p-2 text-right font-semibold">${itemTotal.toFixed(2)}</td>
+                    </tr>`;
+            }).join('');
+
+            poSummaryDiv.innerHTML = `
+                <table class="w-full text-left">
+                    <thead class="bg-gray-200">
+                        <tr>
+                            <th class="p-2">สินค้า</th>
+                            <th class="p-2 text-center">จำนวนสั่ง</th>
+                            <th class="p-2 text-right">ราคาต่อหน่วย</th>
+                            <th class="p-2 text-center">Vender</th>
+                            <th class="p-2 text-right">ราคารวม</th>
+                        </tr>
+                    </thead>
+                    <tbody>${poItemsHtml}</tbody>
+                    <tfoot>
+                        <tr class="font-bold bg-gray-100">
+                            <td colspan="4" class="p-2 text-right">ยอดรวมทั้งหมด:</td>
+                            <td class="p-2 text-right" id="po-total">${currentTotal.toFixed(2)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <div class="mt-4 flex flex-wrap items-center space-x-4">
+                    <label class="mb-2">กำหนดวันจัดซื้อ: <input type="date" id="purchase-date" class="p-2 border rounded" value="${document.getElementById('purchase-date')?.value || new Date().toISOString().substring(0, 10)}"></label>
+                    <button id="confirm-po-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-2">ยืนยันการสั่งซื้อ</button>
+                </div>
+            `;
+            // Re-attach event listeners for the newly rendered inputs to ensure they are interactive
+            document.querySelectorAll('.po-edit-input').forEach(input => {
+                input.addEventListener('change', handlePOItemEdit);
+                input.addEventListener('input', handlePOItemEdit);
+            });
+            document.getElementById('confirm-po-btn').addEventListener('click', handleConfirmPO);
+        };
+
+
+        // Handles the confirmation of a purchase order and exports it to Excel
+        const handleConfirmPO = async () => {
+            if(!state.generatedPO) return;
+            const purchaseDateInput = document.getElementById('purchase-date');
+            if(!purchaseDateInput.value) {
+                showInfoModal('ผิดพลาด', 'กรุณากำหนดวันจัดซื้อ');
+                return;
+            }
+
+            const poNumber = `PO-${Date.now()}`;
+            const newPO = {
+                poNumber, 
+                createdAt: serverTimestamp(), 
+                purchaseDate: purchaseDateInput.value,
+                status: 'pending', 
+                items: state.generatedPO.items, 
+                creator: userAccess.name
+            };
+
+            try {
+                // Prepare data for Excel export
+                const excelData = [{
+                    'เลขที่ใบสั่งซื้อ': newPO.poNumber,
+                    'ผู้สร้าง': newPO.creator,
+                    'วันที่จัดซื้อ': newPO.purchaseDate,
+                    'สถานะ': newPO.status,
+                    'ยอดรวมทั้งหมด': parseFloat(document.getElementById('po-total').textContent), // Get the calculated total
+                }];
+
+                // Add a header row for the item details
+                excelData.push({
+                    'เลขที่ใบสั่งซื้อ': '', 'ผู้สร้าง': '', 'วันที่จัดซื้อ': '', 'สถานะ': '', 'ยอดรวมทั้งหมด': '', // Empty cells for header row alignment
+                    'ชื่อสินค้า': 'ชื่อสินค้า', 'จำนวนสั่ง': 'จำนวนสั่ง', 'ราคาต่อหน่วย': 'ราคาต่อหน่วย', 'Vender': 'Vender', 'ราคารวมสินค้า': 'ราคารวมสินค้า'
+                });
+
+                // Add each item as a separate row for detailed view in Excel
+                for (const productId in newPO.items) {
+                    const item = newPO.items[productId];
+                    excelData.push({
+                        'เลขที่ใบสั่งซื้อ': '', 'ผู้สร้าง': '', 'วันที่จัดซื้อ': '', 'สถานะ': '', 'ยอดรวมทั้งหมด': '', // Empty cells to align with main PO data
+                        'ชื่อสินค้า': item.name,
+                        'จำนวนสั่ง': item.orderQty,
+                        'ราคาต่อหน่วย': item.price,
+                        'Vender': item.vendor,
+                        'ราคารวมสินค้า': (item.price * item.orderQty).toFixed(2)
+                    });
+                }
+                
+                // Export to Excel. The XLSX.writeFile function will prompt the user to save the file.
+                exportToExcel(excelData, `ใบสั่งซื้อ_${newPO.poNumber}.xlsx`, 'ใบสั่งซื้อ');
+
+                // Save to Firestore after successful export
+                await addDoc(collection(db, `artifacts/${appId}/public/data/purchaseOrders`), newPO);
+                showInfoModal('สำเร็จ', `สร้างใบสั่งซื้อ ${poNumber} เรียบร้อยแล้ว และ Export ข้อมูลสำเร็จ`);
+                state.generatedPO = null; // Clear generated PO after confirmation
+                render(); // Re-render to clear the PO summary section
+            } catch(error) {
+                console.error("Error creating PO or exporting:", error);
+                showInfoModal('ผิดพลาด', `ไม่สามารถสร้างใบสั่งซื้อได้ หรือ Export ข้อมูลล้มเหลว: ${error.message}`);
+            }
+        };
+
+        // Renders the list of purchase orders for receiving
+        function renderPurchaseOrdersList() {
+            const listEl = document.getElementById('receiving-list');
+            if (!listEl) return;
+
+            let content = '';
+            if(state.purchaseOrders.length === 0) {
+                 content += `<p class="text-center text-gray-500">ไม่มีรายการสั่งซื้อที่รอรับสินค้า</p>`;
+            } else {
+                content += `<div class="space-y-4">`;
+                state.purchaseOrders.forEach(po => {
+                    const itemsHtml = Object.entries(po.items).map(([pid, item]) => {
+                       const remaining = item.orderQty - (item.receivedQty || 0);
+                       return `<tr class="border-b"><td class="p-2">${item.name}</td><td class="p-2 text-center">${item.orderQty}</td><td class="p-2 text-center">${item.receivedQty || 0}</td><td class="p-2 text-center font-bold text-red-600">${remaining}</td><td class="p-2"><div class="flex space-x-2"><input type="number" id="receive-qty-${po.id}-${pid}" class="w-20 p-1 border rounded" min="1" max="${remaining}"><button class="receive-item-btn bg-teal-500 hover:bg-teal-600 text-white text-sm py-1 px-3 rounded" data-po-id="${po.id}" data-product-id="${pid}" ${remaining === 0 ? 'disabled' : ''}>รับ</button></div></td></tr>`;
+                    }).join('');
+                    content += `<div class="border p-4 rounded-lg bg-gray-50 shadow-sm"><div class="flex justify-between items-start"><div><h4 class="font-bold text-lg">${po.poNumber}</h4><p class="text-sm">สถานะ: <span class="font-semibold">${po.status}</span> | วันที่สั่ง: ${new Date(po.purchaseDate).toLocaleDateString('th-TH')}</p></div><span class="text-xs text-gray-500">สร้างเมื่อ: ${po.createdAt ? new Date(po.createdAt.toDate()).toLocaleString('th-TH') : 'N/A'}</span></div><div class="mt-2 overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-gray-200"><tr><th class="p-2">สินค้า</th><th class="p-2 text-center">สั่ง</th><th class="p-2 text-center">รับแล้ว</th><th class="p-2 text-center">ค้างรับ</th><th class="p-2">รับสินค้า</th></tr></thead><tbody>${itemsHtml}</tbody></table></div></div>`;
+                });
+                content += '</div>';
+            }
+            listEl.innerHTML = content;
+            document.querySelectorAll('.receive-item-btn').forEach(btn => btn.addEventListener('click', handleReceiveItem));
+        }
+
+        // Listens to real-time updates for purchase orders
+        function listenToPurchaseOrders() {
+            const q = query(collection(db, `artifacts/${appId}/public/data/purchaseOrders`), where("status", "!=", "completed"));
+            unsubscribePOListener = onSnapshot(q, (snapshot) => {
+                state.purchaseOrders = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                renderPurchaseOrdersList();
+            }, (error) => {
+                console.error("Error listening to POs:", error);
+                 const listEl = document.getElementById('receiving-list');
+                 if (listEl) listEl.innerHTML = '<p class="text-red-500">เกิดข้อผิดพลาดในการโหลดข้อมูล</p>';
+            });
+        }
+        
+        // Handles receiving items from a purchase order
+        const handleReceiveItem = async(e) => {
+            const { poId, productId } = e.currentTarget.dataset;
+            const qtyInput = document.getElementById(`receive-qty-${poId}-${productId}`);
+            const receiveQty = parseInt(qtyInput.value, 10);
+            
+            const po = state.purchaseOrders.find(p => p.id === poId);
+            const item = po.items[productId];
+            const remaining = item.orderQty - (item.receivedQty || 0);
+
+            if(isNaN(receiveQty) || receiveQty <= 0 || receiveQty > remaining) {
+                showInfoModal('จำนวนผิดพลาด', `กรุณาใส่จำนวนที่ถูกต้อง (1 - ${remaining})`);
+                return;
+            }
+
+            const doReceive = async () => {
+                const poRef = doc(db, `artifacts/${appId}/public/data/purchaseOrders`, poId);
+                const productRef = doc(db, `artifacts/${appId}/public/data/products`, productId);
+                try {
+                    const productDoc = await getDoc(productRef);
+                    if(!productDoc.exists()) throw new Error("ไม่พบสินค้าในระบบ");
+                    const batch = writeBatch(db);
+                    const newStock = productDoc.data().stock + receiveQty;
+                    batch.update(productRef, { stock: newStock });
+                    const newReceivedQty = (item.receivedQty || 0) + receiveQty;
+                    batch.update(poRef, { [`items.${productId}.receivedQty`]: newReceivedQty });
+                    const allItems = { ...po.items, [productId]: { ...item, receivedQty: newReceivedQty } };
+                    const isCompleted = Object.values(allItems).every(i => (i.receivedQty || 0) >= i.orderQty);
+                    const newStatus = isCompleted ? 'completed' : 'partially-received';
+                    if(po.status !== newStatus) {
+                        batch.update(poRef, { status: newStatus });
+                    }
+                    await batch.commit();
+                    showInfoModal('สำเร็จ', `รับสินค้า ${item.name} จำนวน ${receiveQty} ชิ้นเรียบร้อย`);
+                } catch(error) {
+                    console.error("Error receiving item:", error);
+                    showInfoModal("ผิดพลาด", `เกิดข้อผิดพลาด: ${error.message}`);
+                }
+            };
+            showConfirmModal('ยืนยันการรับสินค้า', `คุณต้องการรับ ${item.name} จำนวน ${receiveQty} ชิ้นเข้าสต็อกใช่หรือไม่?`, doReceive);
+        };
+
+        // Loads product data into the admin form for editing
+        const loadProductForEdit = (productId) => {
+            const product = state.products.find(p => p.id === productId);
+            if (product) {
+                document.getElementById('product-id').value = product.id;
+                document.getElementById('product-name').value = product.name;
+                document.getElementById('product-stock').value = product.stock;
+                document.getElementById('product-min').value = product.min || '';
+                document.getElementById('product-max').value = product.max || '';
+                document.getElementById('product-vendor').value = product.vendor || '';
+                document.getElementById('product-price').value = product.price || '';
+                document.getElementById('product-image').value = product.imageUrl || '';
+                // ไม่ต้องใช้ product-image-upload อีกต่อไป
+                // document.getElementById('product-image-upload').value = ''; 
+                document.getElementById('product-form-container').scrollIntoView({ behavior: 'smooth' });
+                document.getElementById('product-name').focus();
+            }
+        }
+        
+        // Handles the submission of the product form (add/edit product)
+        const handleProductFormSubmit = async (e) => {
+            e.preventDefault();
+            console.log("Attempting to save product...");
+
+            const productId = document.getElementById('product-id').value;
+            const productName = document.getElementById('product-name').value.trim();
+            const productStock = parseInt(document.getElementById('product-stock').value, 10);
+            const productMin = parseInt(document.getElementById('product-min').value, 10) || 0;
+            const productMax = parseInt(document.getElementById('product-max').value, 10) || 0;
+            const productVendor = document.getElementById('product-vendor').value.trim() || '';
+            const productPrice = parseFloat(document.getElementById('product-price').value) || 0;
+            // ดึงค่าจากช่อง Path รูปภาพ
+            const productImagePath = document.getElementById('product-image').value.trim();
+            // ไม่ต้องใช้ product-image-upload.files[0] อีกต่อไป
+            // const productImageFile = document.getElementById('product-image-upload').files[0];
+
+            if (!productName || isNaN(productStock)) {
+                showInfoModal('ข้อมูลไม่ครบ', 'กรุณากรอกชื่อสินค้าและจำนวนคงเหลือให้ถูกต้อง');
+                console.log("Validation failed: Product name or stock is invalid.");
+                return;
+            }
+            console.log("Form data collected and validated locally.");
+
+            // เนื่องจากเราจะเก็บรูปภาพใน local server, ไม่ต้องอัปโหลดไป Firebase Storage
+            // finalImageUrl จะเป็น Path สัมพัทธ์ที่ผู้ใช้กรอก
+            const finalImageUrl = productImagePath; 
+            console.log("Using local image path:", finalImageUrl);
+
+            const formData = {
+                name: productName, 
+                stock: productStock,
+                min: productMin, 
+                max: productMax,
+                vendor: productVendor, 
+                price: productPrice,
+                imageUrl: finalImageUrl, // ใช้ Path สัมพัทธ์ที่ผู้ใช้กรอก
+            };
+            console.log("Final formData for Firestore:", formData);
+
+            try {
+                if (productId) {
+                    console.log("Updating existing product with ID:", productId);
+                    await setDoc(doc(db, `artifacts/${appId}/public/data/products`, productId), formData, { merge: true });
+                    showInfoModal('สำเร็จ', 'อัปเดตข้อมูลสินค้าสำเร็จ');
+                    console.log("Product updated successfully in Firestore.");
+                } else {
+                    console.log("Adding new product to Firestore.");
+                    await addDoc(collection(db, `artifacts/${appId}/public/data/products`), formData);
+                    showInfoModal('สำเร็จ', 'เพิ่มสินค้าใหม่สำเร็จ');
+                    console.log("New product added successfully to Firestore.");
+                }
+                clearProductForm(); // Clear the form after successful submission
+            } catch (error) {
+                console.error("Error saving product to Firestore:", error);
+                showInfoModal('ผิดพลาด', `เกิดข้อผิดพลาดในการบันทึกข้อมูลสินค้า: ${error.message} (Code: ${error.code || 'N/A'})`);
+            }
+        };
+
+        // Handles the submission of the user form (add new user)
+        const handleUserFormSubmit = async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('user-id').value.trim();
+            const userName = document.getElementById('user-name').value.trim();
+            if(!userId || !userName) {
+                showInfoModal('ข้อมูลไม่ครบ', 'กรุณากรอกรหัสและชื่อพนักงาน'); 
+                return;
+            }
+            try {
+                // Initialize permissions for a new user, including isAdmin: false by default
+                await setDoc(doc(db, `artifacts/${appId}/public/data/users`, userId), { name: userName, permissions: { canApprove: false, canOrder: false, canReceive: false, isAdmin: false }}, { merge: true });
+                showInfoModal('สำเร็จ', 'บันทึกข้อมูลผู้ใช้สำเร็จ');
+                document.getElementById('user-form').reset();
+            } catch(error) {
+                console.error('Error adding user:', error);
+                showInfoModal('ผิดพลาด', 'เกิดข้อผิดพลาดในการเพิ่มผู้ใช้');
+            }
+        };
+
+        // Handles changes to user permissions
+        const handlePermissionChange = async (e) => {
+            const userId = e.target.dataset.uid;
+            const permission = e.target.dataset.permission;
+            const value = e.target.checked;
+            const userRef = doc(db, `artifacts/${appId}/public/data/users`, userId);
+            try {
+                await updateDoc(userRef, { [`permissions.${permission}`]: value });
+                showInfoModal('สำเร็จ', 'อัปเดตสิทธิ์เรียบร้อย');
+            } catch(error) {
+                console.error('Error updating permission:', error);
+                showInfoModal('ผิดพลาด', 'เกิดข้อผิดพลาดในการอัปเดตสิทธิ์');
+                e.target.checked = !value; // Revert checkbox state on error
+            }
+        };
+
+        // Clears the product form fields
+        const clearProductForm = () => {
+             document.getElementById('product-form').reset();
+             document.getElementById('product-id').value = '';
+             // ไม่ต้องใช้ product-image-upload อีกต่อไป
+             // document.getElementById('product-image-upload').value = ''; 
+        }
+
+        // Helper function to convert array of objects to Excel and trigger download
+        const exportToExcel = (data, fileName, sheetName) => {
+            // Create a new workbook and add a worksheet
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            // Write the workbook and trigger download (prompts user to save)
+            XLSX.writeFile(wb, fileName);
+        };
+
+        // Exports requisition data to an Excel file
+        const exportRequisitions = async () => {
+            try {
+                // Fetch all requisition documents
+                const querySnapshot = await getDocs(collection(db, `artifacts/${appId}/public/data/requisitions`));
+                const requisitions = querySnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    // Handle Firestore Timestamp objects and potential missing fields
+                    const createdAtDate = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : null);
+                    const approvedAtDate = data.approvedAt instanceof Timestamp ? data.approvedAt.toDate() : (data.approvedAt ? new Date(data.approvedAt) : null);
+
+                    // Format items into a single string for the Excel cell
+                    const itemsString = Object.entries(data.items || {}).map(([pid, qty]) => { // Ensure data.items is an object
+                        const product = state.products.find(p => p.id === pid);
+                        return `${product ? product.name : `สินค้าไม่ทราบ (${pid})`} (${qty} ชิ้น)`;
+                    }).join(', ');
+
+                    return {
+                        'เลขที่ใบเบิก': data.invNumber || '-',
+                        'รหัสผู้เบิก': data.requesterId || '-',
+                        'ชื่อผู้เบิก': data.requesterName || '-',
+                        'รายการสินค้า': itemsString,
+                        'สถานะ': data.status || '-',
+                        'ผู้อนุมัติ': data.approvedBy || '-',
+                        'วันที่สร้าง': createdAtDate ? createdAtDate.toLocaleString('th-TH') : '-',
+                        'วันที่อนุมัติ': approvedAtDate ? approvedAtDate.toLocaleString('th-TH') : '-',
+                    };
+                });
+
+                if (requisitions.length === 0) {
+                    showInfoModal('ไม่มีข้อมูล', 'ไม่มีรายการเบิกที่จะ Export');
+                    return;
+                }
+
+                console.log("Requisitions data for export:", requisitions); // Log data for debugging
+                exportToExcel(requisitions, 'รายการเบิกและอนุมัติ.xlsx', 'รายการเบิก');
+                showInfoModal('สำเร็จ', 'Export รายการเบิกและอนุมัติสำเร็จ');
+            } catch (error) {
+                console.error("Error exporting requisitions:", error);
+                showInfoModal('ผิดพลาด', `เกิดข้อผิดพลาดในการ Export รายการเบิก: ${error.message}`);
+            }
+        };
+
+        // Exports purchase order data to an Excel file
+        const exportPurchaseOrders = async () => {
+            try {
+                // Fetch all purchase order documents
+                const querySnapshot = await getDocs(collection(db, `artifacts/${appId}/public/data/purchaseOrders`));
+                const purchaseOrders = querySnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    // Handle Firestore Timestamp objects and potential missing fields
+                    const createdAtDate = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : null);
+
+                    // Format items into a single string for the Excel cell
+                    const itemsString = Object.entries(data.items || {}).map(([pid, item]) => { // Ensure data.items is an object
+                        return `${item.name || `สินค้าไม่ทราบ (${pid})`} (สั่ง: ${item.orderQty || 0}, รับแล้ว: ${item.receivedQty || 0})`;
+                    }).join(', ');
+
+                    return {
+                        'เลขที่ใบสั่งซื้อ': data.poNumber || '-',
+                        'ผู้สร้าง': data.creator || '-',
+                        'วันที่จัดซื้อ': data.purchaseDate || '-',
+                        'สถานะ': data.status || '-',
+                        'รายการสินค้า': itemsString,
+                        'วันที่สร้าง': createdAtDate ? createdAtDate.toLocaleString('th-TH') : '-',
+                    };
+                });
+
+                if (purchaseOrders.length === 0) {
+                    showInfoModal('ไม่มีข้อมูล', 'ไม่มีรายการสั่งซื้อที่จะ Export');
+                    return;
+                }
+
+                console.log("Purchase Orders data for export:", purchaseOrders); // Log data for debugging
+                exportToExcel(purchaseOrders, 'รายการสั่งซื้อและรับเข้า.xlsx', 'รายการสั่งซื้อ');
+                showInfoModal('สำเร็จ', 'Export รายการสั่งซื้อและรับเข้าสำเร็จ');
+            } catch (error) {
+                console.error("Error exporting purchase orders:", error);
+                showInfoModal('ผิดพลาด', `เกิดข้อผิดพลาดในการ Export รายการสั่งซื้อ: ${error.message}`);
+            }
+        };
+
+        // New function to export all product stock data
+        const exportAllStock = async () => {
+            try {
+                // Fetch all product documents (they are already in state.products, but refetch for freshness)
+                const productsToExport = state.products.map(p => ({
+                    'ชื่อสินค้า': p.name,
+                    'คงเหลือ': p.stock,
+                    'Min Stock': p.min || 0,
+                    'Max Stock': p.max || 0,
+                    'Vender': p.vendor || '-',
+                    'ราคา': p.price || 0
+                }));
+
+                if (productsToExport.length === 0) {
+                    showInfoModal('ไม่มีข้อมูล', 'ไม่มีสินค้าในสต็อกที่จะ Export');
+                    return;
+                }
+
+                exportToExcel(productsToExport, 'สินค้าคงเหลือทั้งหมด.xlsx', 'สินค้าคงเหลือ');
+                showInfoModal('สำเร็จ', 'Export สินค้าคงเหลือทั้งหมดสำเร็จ');
+            } catch (error) {
+                console.error("Error exporting all stock:", error);
+                showInfoModal('ผิดพลาด', `เกิดข้อผิดพลาดในการ Export สินค้าคงเหลือ: ${error.message}`);
+            }
+        };
+
+        // Initializes Firebase app and sets up authentication and data listeners
+        const initializeAppAndData = async () => {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUser = user;
+                    // Listen to products collection for real-time updates
+                    onSnapshot(collection(db, `artifacts/${appId}/public/data/products`), (snapshot) => {
+                        state.products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        // Only re-render if the current page depends on product data
+                        if(['products', 'admin', 'orders'].includes(state.currentPage)) render();
+                    }, error => console.error("Product listener failed:", error));
+                    
+                    // Listen to users collection for real-time updates
+                    onSnapshot(collection(db, `artifacts/${appId}/public/data/users`), (snapshot) => {
+                        state.users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        
+                        // ตรวจสอบและสร้างผู้ใช้ Admin เริ่มต้น (รหัส 1458) หากยังไม่มี
+                        // คุณสามารถเปลี่ยน '1458' เป็นรหัส Admin หลักที่คุณต้องการได้
+                        if (!state.users.some(u => u.id === '1458')) {
+                            const adminRef = doc(db, `artifacts/${appId}/public/data/users`, '1458');
+                            setDoc(adminRef, { name: 'ธเนศ วงษ์โพธิ์ดี', permissions: { canApprove: true, canOrder: true, canReceive: true, isAdmin: true }}, { merge: true });
+                        }
+
+                        // Re-render admin page if currently on it
+                        if(state.currentPage === 'admin') render();
+                    }, error => console.error("User listener failed:", error));
+                    updateUserDisplay('Guest'); // Initial display
+                    render(); // Render initial page
+                }
+            });
+            try {
+                // Sign in with custom token if available, otherwise sign in anonymously
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else { await signInAnonymously(auth); }
+            } catch (error) {
+                console.error("Firebase Auth Error:", error);
+                mainContent.innerHTML = `<p class="text-red-500 text-center">Authentication failed. The app cannot start.</p>`;
+            }
+        };
+
+        // Updates the user display in the header
+        const updateUserDisplay = (name, role = '') => {
+            const userDisplay = document.getElementById('user-display');
+            let roleText = role.charAt(0).toUpperCase() + role.slice(1);
+            userDisplay.innerHTML = `พนักงาน: <span class="font-semibold">${name}</span> ${role ? `| หน้าที่: <span class="font-semibold">${roleText}</span>` : ''}`;
+        }
+        
+        // Initialize the application when the script loads
+        initializeAppAndData();
+
+    </script>
+
+</body>
+</html>
